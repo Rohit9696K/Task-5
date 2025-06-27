@@ -1,0 +1,110 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.preprocessing import image
+
+# ====================== STEP 1: DATASET AND IMAGE GENERATOR ======================
+# Set path to dataset (change this to your local path)
+data_dir = "/path/to/food-101/images"  # Example: "C:/Users/yourname/Downloads/food-101/images"
+
+# Parameters
+img_size = 224
+batch_size = 32
+
+# Load and preprocess data
+datagen = ImageDataGenerator(validation_split=0.2, rescale=1./255)
+
+train_gen = datagen.flow_from_directory(
+    data_dir,
+    target_size=(img_size, img_size),
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='training'
+)
+
+val_gen = datagen.flow_from_directory(
+    data_dir,
+    target_size=(img_size, img_size),
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='validation'
+)
+
+# ====================== STEP 2: BUILD THE CNN MODEL ======================
+base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(img_size, img_size, 3))
+base_model.trainable = False  # Freeze pre-trained layers
+
+model = Sequential([
+    base_model,
+    GlobalAveragePooling2D(),
+    Dense(101, activation='softmax')  # 101 food categories
+])
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.summary()
+
+# ====================== STEP 3: TRAIN THE MODEL ======================
+model.fit(train_gen, validation_data=val_gen, epochs=5)
+
+# ====================== STEP 4: SAVE MODEL ======================
+model.save("food101_classifier.h5")
+print("Model saved as food101_classifier.h5")
+
+# ====================== STEP 5: CALORIE DICTIONARY ======================
+# Example calorie values for some food categories
+calorie_dict = {
+    'apple_pie': 296,
+    'baby_back_ribs': 320,
+    'baklava': 335,
+    'beef_carpaccio': 190,
+    'beef_tartare': 250,
+    'caesar_salad': 180,
+    'cheesecake': 401,
+    'chicken_curry': 290,
+    'chocolate_cake': 370,
+    'club_sandwich': 320,
+    'donuts': 452,
+    'falafel': 333,
+    'french_fries': 365,
+    'french_toast': 289,
+    'hamburger': 295,
+    'hot_dog': 290,
+    'ice_cream': 207,
+    'lasagna': 350,
+    'macaroni_and_cheese': 310,
+    'omelette': 154,
+    'pad_thai': 357,
+    'pizza': 266,
+    'ramen': 436,
+    'spaghetti_bolognese': 350,
+    'sushi': 200,
+    'tiramisu': 240
+    # Add more as needed...
+}
+
+# ====================== STEP 6: PREDICT AND ESTIMATE CALORIES ======================
+def predict_and_estimate(image_path, model, calorie_dict, class_indices):
+    img = image.load_img(image_path, target_size=(224, 224))
+    img_array = image.img_to_array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+
+    prediction = model.predict(img_array)
+    class_idx = np.argmax(prediction)
+    label = list(class_indices.keys())[list(class_indices.values()).index(class_idx)]
+    calories = calorie_dict.get(label, "Unknown")
+
+    print(f"\nPredicted Food: {label}")
+    print(f"Estimated Calories: {calories} kcal")
+
+# ====================== STEP 7: LOAD MODEL AND PREDICT ======================
+# Load saved model
+model = load_model("food101_classifier.h5")
+
+# Predict using a sample image
+sample_image_path = "/path/to/sample_food.jpg"  # <-- Change to your test image path
+predict_and_estimate(sample_image_path, model, calorie_dict, train_gen.class_indices)
